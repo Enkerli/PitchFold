@@ -195,55 +195,6 @@ function NeutralLattice({ mask, root, useFlats, onMaskChange, onRootChange,
   );
 }
 
-// ── Scale family picker ───────────────────────────────────────────────────────
-
-function ScalePicker({ mask, root, onSelect, paper = window.PAPER }) {
-  const [openFamily, setOpenFamily] = React.useState(null);
-  const families = window.SCALE_FAMILIES || [];
-
-  return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, padding: '4px 0' }}>
-      {families.map((fam, fi) => (
-        <div key={fi} style={{ position: 'relative' }}>
-          <button
-            onClick={() => setOpenFamily(openFamily === fi ? null : fi)}
-            style={{
-              padding: '3px 8px', fontSize: 11, borderRadius: 4,
-              border: `1px solid ${paper?.rule || '#D4CAB8'}`,
-              background: openFamily === fi ? (paper?.ink || '#2D2620') : (paper?.card || '#FAF8F4'),
-              color: openFamily === fi ? (paper?.card || '#FAF8F4') : (paper?.ink || '#2D2620'),
-              cursor: 'pointer', fontFamily: 'InterTight, system-ui',
-            }}>
-            {fam.name}
-          </button>
-          {openFamily === fi && (
-            <div style={{
-              position: 'absolute', top: '100%', left: 0, zIndex: 100,
-              background: paper?.card || '#FAF8F4',
-              border: `1px solid ${paper?.rule || '#D4CAB8'}`,
-              borderRadius: 6, padding: 4, minWidth: 130,
-              boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
-            }}>
-              {fam.modes.map((mode, mi) => (
-                <div key={mi}
-                  onClick={() => { onSelect(mode.mask, root); setOpenFamily(null); }}
-                  style={{
-                    padding: '4px 8px', fontSize: 11, borderRadius: 3,
-                    cursor: 'pointer', fontFamily: 'InterTight, system-ui',
-                    color: paper?.ink || '#2D2620',
-                    background: mode.mask === (mask & 0xFFF) ? (paper?.rule || '#D4CAB8') : 'transparent',
-                  }}>
-                  {mode.name}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      ))}
-    </div>
-  );
-}
-
 // ── All / None / Invert ───────────────────────────────────────────────────────
 
 function MaskControls({ mask, onMaskChange, paper = window.PAPER }) {
@@ -290,44 +241,105 @@ function RootPicker({ root, useFlats, onRootChange, paper = window.PAPER }) {
   );
 }
 
-// ── Quick preset strip ────────────────────────────────────────────────────────
-// Always-visible row of common scale buttons for fast performance switching.
-// Ordered by performance utility: major, minor, modal, pentatonic, blues, chords.
+// ── Scale bank — unified preset + family picker ───────────────────────────────
+// Tab row: "Common" (quick performance presets) then one tab per family.
+// Scale buttons show note count (k) in family views, echoing PickPCS's k-based
+// organisation.  Active scale is amber-highlighted across all views.
 
-const QUICK_PRESETS = [
-  { id: 'ionian',     name: 'Major'      },
-  { id: 'aeolian',    name: 'Minor'      },
-  { id: 'dorian',     name: 'Dorian'     },
-  { id: 'mixolydian', name: 'Mixo'       },
-  { id: 'pentMaj',    name: 'Pent Maj'   },
-  { id: 'pentMin',    name: 'Pent Min'   },
-  { id: 'blues',      name: 'Blues'      },
-  { id: 'chromatic',  name: 'Chromatic'  },
+// Scales surfaced in the Common tab — ordered by live-performance utility.
+const COMMON_IDS = [
+  { id: 'ionian',     label: 'Major'     },
+  { id: 'aeolian',    label: 'Minor'     },
+  { id: 'dorian',     label: 'Dorian'    },
+  { id: 'mixolydian', label: 'Mixo.'     },
+  { id: 'pentMin',    label: 'Pent. Min' },
+  { id: 'pentMaj',    label: 'Pent. Maj' },
+  { id: 'blues',      label: 'Blues'     },
+  { id: 'chromatic',  label: 'Chromatic' },
 ];
 
-function QuickPresets({ mask, root, onSelect, paper = window.PAPER }) {
-  const scales = window.SCALES || [];
+// Short tab label per family (keep them scannable).
+const FAMILY_LABELS = {
+  'Diatonic':    'Diatonic',
+  'Pentatonic':  'Penta.',
+  'Jazz Minor':  'Jazz Min.',
+  'Harm. Minor': 'Harm. Min.',
+  'Symmetric':   'Symmetric',
+  'Bebop':       'Bebop',
+  'Blues':       'Blues',
+  'Chordal':     'Chordal',
+};
+
+function countBits(n) {
+  let c = 0, v = n & 0xFFF;
+  while (v) { c += v & 1; v >>= 1; }
+  return c;
+}
+
+function ScaleBank({ mask, root, onSelect, paper = window.PAPER }) {
+  const [tab, setTab] = React.useState('Common');
+  const scales  = window.SCALES         || [];
+  const families = window.SCALE_FAMILIES || [];
+
+  const tabs = ['Common', ...families.map(f => FAMILY_LABELS[f.name] || f.name)];
+
+  const shown = tab === 'Common'
+    ? COMMON_IDS.map(({ id, label }) => {
+        const s = scales.find(e => e.id === id);
+        return s ? { ...s, label } : null;
+      }).filter(Boolean)
+    : (() => {
+        // Reverse-map the short label back to the original family name.
+        const fam = families.find(f => (FAMILY_LABELS[f.name] || f.name) === tab);
+        return fam ? fam.modes : [];
+      })();
+
+  const scaleBtn = (entry, label) => {
+    const active = (mask & 0xFFF) === entry.mask;
+    const k = countBits(entry.mask);
+    return (
+      <button key={entry.id}
+        onClick={() => onSelect(entry.mask, root)}
+        title={`${entry.name} — ${k} notes`}
+        style={{
+          padding: '4px 9px', fontSize: 11, borderRadius: 5, cursor: 'pointer',
+          border: `1px solid ${active ? (paper?.amber || '#C4873A') : (paper?.rule || '#D4CAB8')}`,
+          background: active ? (paper?.amber || '#C4873A') : (paper?.card || '#FAF8F4'),
+          color: active ? (paper?.card || '#FAF8F4') : (paper?.ink || '#2D2620'),
+          fontFamily: 'InterTight, system-ui',
+          transition: 'background 100ms',
+          display: 'flex', alignItems: 'center', gap: 4,
+        }}>
+        {label ?? entry.name}
+        {tab !== 'Common' && (
+          <span style={{
+            fontSize: 9, opacity: 0.6,
+            fontVariantNumeric: 'tabular-nums',
+          }}>{k}</span>
+        )}
+      </button>
+    );
+  };
+
   return (
-    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-      {QUICK_PRESETS.map(({ id, name }) => {
-        const entry  = scales.find(s => s.id === id);
-        if (!entry) return null;
-        const active = (mask & 0xFFF) === entry.mask;
-        return (
-          <button key={id}
-            onClick={() => onSelect(entry.mask, root)}
-            style={{
-              padding: '4px 10px', fontSize: 11, borderRadius: 5, cursor: 'pointer',
-              border: `1px solid ${active ? (paper?.amber || '#C4873A') : (paper?.rule || '#D4CAB8')}`,
-              background: active ? (paper?.amber || '#C4873A') : (paper?.card || '#FAF8F4'),
-              color: active ? (paper?.card || '#FAF8F4') : (paper?.ink || '#2D2620'),
-              fontFamily: 'InterTight, system-ui',
-              transition: 'background 100ms',
-            }}>
-            {name}
-          </button>
-        );
-      })}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      {/* Tab row */}
+      <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
+        {tabs.map(t => (
+          <button key={t} onClick={() => setTab(t)} style={{
+            padding: '3px 8px', fontSize: 10, borderRadius: 4, cursor: 'pointer',
+            border: `1px solid ${t === tab ? (paper?.ink || '#2D2620') : (paper?.rule || '#D4CAB8')}`,
+            background: t === tab ? (paper?.ink || '#2D2620') : 'transparent',
+            color: t === tab ? (paper?.card || '#FAF8F4') : (paper?.ink50 || '#6B5E55'),
+            fontFamily: 'InterTight, system-ui',
+            letterSpacing: '0.03em',
+          }}>{t}</button>
+        ))}
+      </div>
+      {/* Scale buttons */}
+      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+        {shown.map(s => scaleBtn(s, s.label))}
+      </div>
     </div>
   );
 }
@@ -388,8 +400,8 @@ export function ScaleEditor({ state, sendParam, paper = window.PAPER }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      {/* Quick presets — most common scales, always visible for live use */}
-      <QuickPresets mask={mask} root={root} paper={paper}
+      {/* Scale bank — Common quick presets + full family taxonomy in one tabbed UI */}
+      <ScaleBank mask={mask} root={root} paper={paper}
         onSelect={(m, r) => { setMask(m); setRoot(r); }} />
       {/* Wheel + Lattice side by side */}
       <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', flexWrap: 'wrap' }}>
@@ -406,9 +418,6 @@ export function ScaleEditor({ state, sendParam, paper = window.PAPER }) {
       </div>
       {/* Root */}
       <RootPicker root={root} useFlats={useFlats} onRootChange={setRoot} paper={paper} />
-      {/* Scale family picker (full taxonomy dropdown) */}
-      <ScalePicker mask={mask} root={root} paper={paper}
-        onSelect={(m, r) => { setMask(m); setRoot(r); }} />
       {/* All / None / Invert */}
       <MaskControls mask={mask} onMaskChange={setMask} paper={paper} />
       {/* Direct mask entry */}
