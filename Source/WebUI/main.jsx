@@ -2,6 +2,7 @@
 
 import { initJuceBridge, sendParam, sendSelectPad, sendPadData, sendPanic, PARAM_MAP }
   from './juce-bridge.js';
+import './design/tokens.jsx';              // window.PAPER, SCALES, SCALE_FAMILIES, PITCH_*
 import { ScaleEditor }    from './design/scale-editor.jsx';
 import { QuantizerPanel } from './design/quantizer-panel.jsx';
 import { ChordPads }      from './design/chord-pads.jsx';

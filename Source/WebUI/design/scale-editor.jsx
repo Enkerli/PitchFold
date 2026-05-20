@@ -290,6 +290,94 @@ function RootPicker({ root, useFlats, onRootChange, paper = window.PAPER }) {
   );
 }
 
+// ── Quick preset strip ────────────────────────────────────────────────────────
+// Always-visible row of common scale buttons for fast performance switching.
+// Ordered by performance utility: major, minor, modal, pentatonic, blues, chords.
+
+const QUICK_PRESETS = [
+  { id: 'ionian',     name: 'Major'      },
+  { id: 'aeolian',    name: 'Minor'      },
+  { id: 'dorian',     name: 'Dorian'     },
+  { id: 'mixolydian', name: 'Mixo'       },
+  { id: 'pentMaj',    name: 'Pent Maj'   },
+  { id: 'pentMin',    name: 'Pent Min'   },
+  { id: 'blues',      name: 'Blues'      },
+  { id: 'chromatic',  name: 'Chromatic'  },
+];
+
+function QuickPresets({ mask, root, onSelect, paper = window.PAPER }) {
+  const scales = window.SCALES || [];
+  return (
+    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+      {QUICK_PRESETS.map(({ id, name }) => {
+        const entry  = scales.find(s => s.id === id);
+        if (!entry) return null;
+        const active = (mask & 0xFFF) === entry.mask;
+        return (
+          <button key={id}
+            onClick={() => onSelect(entry.mask, root)}
+            style={{
+              padding: '4px 10px', fontSize: 11, borderRadius: 5, cursor: 'pointer',
+              border: `1px solid ${active ? (paper?.amber || '#C4873A') : (paper?.rule || '#D4CAB8')}`,
+              background: active ? (paper?.amber || '#C4873A') : (paper?.card || '#FAF8F4'),
+              color: active ? (paper?.card || '#FAF8F4') : (paper?.ink || '#2D2620'),
+              fontFamily: 'InterTight, system-ui',
+              transition: 'background 100ms',
+            }}>
+            {name}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Mask input ────────────────────────────────────────────────────────────────
+// Direct decimal entry for power users; also shows hex equivalent.
+
+function ScaleMaskInput({ mask, onMaskChange, paper = window.PAPER }) {
+  const current = mask & 0xFFF;
+  const [draft, setDraft] = React.useState(String(current));
+
+  React.useEffect(() => { setDraft(String(current)); }, [current]);
+
+  const commit = () => {
+    const n = parseInt(draft, 10);
+    if (Number.isFinite(n) && n >= 0 && n <= 0xFFF && n !== current)
+      onMaskChange(n);
+    else
+      setDraft(String(current));
+  };
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <span style={{
+        fontSize: 10, letterSpacing: '0.07em', textTransform: 'uppercase',
+        color: paper?.ink50 || '#6B5E55', fontFamily: 'InterTight, system-ui',
+      }}>Mask</span>
+      <input type="text" value={draft}
+        onChange={e => setDraft(e.target.value)}
+        onKeyDown={e => {
+          if (e.key === 'Enter') { commit(); e.currentTarget.blur(); }
+          if (e.key === 'Escape') { setDraft(String(current)); e.currentTarget.blur(); }
+        }}
+        onBlur={commit}
+        style={{
+          width: 56, padding: '3px 6px',
+          fontFamily: 'ui-monospace, "SF Mono", Menlo, monospace',
+          fontSize: 12, fontVariantNumeric: 'tabular-nums',
+          color: paper?.ink || '#2D2620', background: paper?.bg || '#F5F0E8',
+          border: `1px solid ${paper?.rule || '#D4CAB8'}`, borderRadius: 4,
+          textAlign: 'right', outline: 'none',
+        }} />
+      <span style={{
+        fontFamily: 'ui-monospace, "SF Mono", Menlo, monospace',
+        fontSize: 10, color: paper?.ink50 || '#6B5E55',
+      }}>0x{current.toString(16).toUpperCase().padStart(3, '0')}</span>
+    </div>
+  );
+}
+
 // ── Composed scale editor ─────────────────────────────────────────────────────
 
 export function ScaleEditor({ state, sendParam, paper = window.PAPER }) {
@@ -300,6 +388,9 @@ export function ScaleEditor({ state, sendParam, paper = window.PAPER }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {/* Quick presets — most common scales, always visible for live use */}
+      <QuickPresets mask={mask} root={root} paper={paper}
+        onSelect={(m, r) => { setMask(m); setRoot(r); }} />
       {/* Wheel + Lattice side by side */}
       <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', flexWrap: 'wrap' }}>
         <ChromaticWheelSVG
@@ -315,11 +406,13 @@ export function ScaleEditor({ state, sendParam, paper = window.PAPER }) {
       </div>
       {/* Root */}
       <RootPicker root={root} useFlats={useFlats} onRootChange={setRoot} paper={paper} />
-      {/* Scale presets */}
+      {/* Scale family picker (full taxonomy dropdown) */}
       <ScalePicker mask={mask} root={root} paper={paper}
         onSelect={(m, r) => { setMask(m); setRoot(r); }} />
       {/* All / None / Invert */}
       <MaskControls mask={mask} onMaskChange={setMask} paper={paper} />
+      {/* Direct mask entry */}
+      <ScaleMaskInput mask={mask} onMaskChange={setMask} paper={paper} />
     </div>
   );
 }

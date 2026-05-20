@@ -153,8 +153,14 @@ function togglePc(mask, pc) {
   return mask ^ (1 << (11 - pc));
 }
 
+// Group SCALES into families for the family-picker dropdown.
+const SCALE_FAMILIES = [...new Set(SCALES.map(s => s.family))].map(family => ({
+  name:  family,
+  modes: SCALES.filter(s => s.family === family),
+}));
+
 Object.assign(window, {
-  PAPER, PAPER_DARK, LANES, SCALES,
+  PAPER, PAPER_DARK, LANES, SCALES, SCALE_FAMILIES,
   PITCH_NAMES, PITCH_SHORT, PITCH_SHARP, PITCH_FLAT,
   pitchName,
   pcActive, togglePc,
