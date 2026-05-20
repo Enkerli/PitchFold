@@ -4,6 +4,7 @@ import { initJuceBridge, sendParam, sendSelectPad, sendPadData, sendPanic, PARAM
   from './juce-bridge.js';
 import './design/tokens.jsx';              // window.PAPER, SCALES, SCALE_FAMILIES, PITCH_*
 import { ScaleEditor }    from './design/scale-editor.jsx';
+import { PCSExplorer }    from './design/pcs-explorer.jsx';
 import { QuantizerPanel } from './design/quantizer-panel.jsx';
 import { ChordPads }      from './design/chord-pads.jsx';
 import { VoicePanel }     from './design/voice-panel.jsx';
@@ -69,10 +70,11 @@ function PitchFoldApp() {
   // ── Tabs ───────────────────────────────────────────────────────────────────
 
   const TABS = [
-    { id: 'scale', label: 'Scale' },
-    { id: 'pads',  label: 'Pads'  },
-    { id: 'voice', label: 'Voice' },
-    { id: 'time',  label: 'Time'  },
+    { id: 'scale',   label: 'Scale'   },
+    { id: 'pickpcs', label: 'PickPCS' },
+    { id: 'pads',    label: 'Pads'    },
+    { id: 'voice',   label: 'Voice'   },
+    { id: 'time',    label: 'Time'    },
   ];
 
   return (
@@ -146,6 +148,18 @@ function PitchFoldApp() {
               <SectionTitle paper={activePaper}>Quantizer</SectionTitle>
               <QuantizerPanel state={state} sendParam={send} paper={activePaper} />
             </div>
+          </div>
+        )}
+
+        {tab === 'pickpcs' && (
+          <div style={{ maxWidth: 520, margin: '0 auto' }}>
+            <SectionTitle paper={activePaper}>PickPCS Explorer</SectionTitle>
+            <PCSExplorer
+              mask={state.pcsMask}
+              root={state.pcsRoot}
+              paper={activePaper}
+              onSelect={(m, r) => { send('pcsMask', m); send('pcsRoot', r); }}
+            />
           </div>
         )}
 
