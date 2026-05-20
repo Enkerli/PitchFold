@@ -6,39 +6,41 @@
 #include "Quantizer/TimeQuantizer.h"
 #include "Quantizer/VoiceProcessor.h"
 #include "Pads/ChordPadBank.h"
+#include <array>
 
 namespace juce { class MidiOutput; }
 
 // ── Parameter IDs ─────────────────────────────────────────────────────────────
-// These are the stable serialized ABI.  Never rename a shipped ID.
 namespace ParamID
 {
     // PCS
     inline const juce::String pcsRoot      { "pcsRoot"      };  // 0–11
     inline const juce::String pcsMask      { "pcsMask"      };  // 0–4095
-    inline const juce::String quantDir     { "quantDir"     };  // 0=Nearest 1=Up 2=Down
-    inline const juce::String quantStrength{ "quantStrength"};  // 0–1
+    // quantDir: 0=Auto 1=Nearest 2=Up 3=Down
+    inline const juce::String quantDir     { "quantDir"     };
+    // quantStrength kept for future probability/histogram use; not shown in UI yet
+    inline const juce::String quantStrength{ "quantStrength"};
     inline const juce::String outputLo     { "outputLo"     };  // 0–127
     inline const juce::String outputHi     { "outputHi"     };  // 0–127
-    inline const juce::String useFlats     { "useFlats"     };  // bool
+    inline const juce::String useFlats     { "useFlats"     };
 
     // Time
-    inline const juce::String timeGrid     { "timeGrid"     };  // TimeGrid enum index
-    inline const juce::String timeStrength { "timeStrength" };  // 0–1
-    inline const juce::String humanizeTime { "humanizeTime" };  // 0–200 ms
-    inline const juce::String humanizeVel  { "humanizeVel"  };  // 0–1
-    inline const juce::String swing        { "swing"        };  // 0–1
+    inline const juce::String timeGrid     { "timeGrid"     };
+    inline const juce::String timeStrength { "timeStrength" };
+    inline const juce::String humanizeTime { "humanizeTime" };
+    inline const juce::String humanizeVel  { "humanizeVel"  };
+    inline const juce::String swing        { "swing"        };
 
     // Delay / look-ahead
-    inline const juce::String lookAheadMs  { "lookAheadMs"  };  // 0–500 ms
+    inline const juce::String lookAheadMs  { "lookAheadMs"  };
 
     // Voice
-    inline const juce::String voiceMode    { "voiceMode"    };  // VoiceMode index
-    inline const juce::String monoSelect   { "monoSelect"   };  // MonoSelect index
-    inline const juce::String splitVoices  { "splitVoices"  };  // 1–4
-    inline const juce::String splitChannel { "splitChannel" };  // 1–13
+    inline const juce::String voiceMode    { "voiceMode"    };
+    inline const juce::String monoSelect   { "monoSelect"   };
+    inline const juce::String splitVoices  { "splitVoices"  };
+    inline const juce::String splitChannel { "splitChannel" };
 
-    // Chord pads — pad N mask/root stored as padMaskN / padRootN
+    // Chord pads
     inline juce::String padMask (int n) { return "padMask" + juce::String (n); }
     inline juce::String padRoot (int n) { return "padRoot" + juce::String (n); }
 }
@@ -87,7 +89,7 @@ public:
     void setPadMask  (int pad, uint16_t mask) noexcept;
     void setPadRoot  (int pad, int root)      noexcept;
     void setPadLabel (int pad, const juce::String& label) noexcept;
-    void selectPad   (int pad)                noexcept;   // -1 = deselect
+    void selectPad   (int pad)                noexcept;
     int  selectedPad()                 const  noexcept;
 
     const pf::ChordPadBank& padBank() const noexcept { return _pads; }
@@ -101,25 +103,32 @@ public:
     juce::MidiOutput* getDirectMidiOutput() const noexcept;
 
 private:
-    // ── Processing helpers ────────────────────────────────────────────────────
-    void processNoteOn  (const juce::MidiMessage& msg, int samplePos,
-                         juce::MidiBuffer& out);
-    void processNoteOff (const juce::MidiMessage& msg, int samplePos,
-                         juce::MidiBuffer& out);
+    // ── Active-note map — fixes NoteOff matching after pitch quantization ─────
+    // Indexed by the *input* note (0-127).  Stores every output note that was
+    // generated for that input, so NoteOff can silence the right pitches even
+    // when the quantizer remapped them to a different pitch class.
+    struct OutNote { int note { -1 }; int channel { 1 }; };
+    struct NoteRecord
+    {
+        bool    active { false };
+        OutNote outputs[pf::VoiceProcessor::kMaxChordVoices] {};
+        int     count  { 0 };
+    };
+    std::array<NoteRecord, 128> _noteMap {};
+
+    void clearNoteMap (juce::MidiBuffer& out, int samplePos) noexcept;
 
     // ── Sub-systems ───────────────────────────────────────────────────────────
-    pf::DelayBuffer   _delay;
-    pf::TimeQuantizer _timeQ;
+    pf::DelayBuffer    _delay;
+    pf::TimeQuantizer  _timeQ;
     pf::VoiceProcessor _voices;
-    pf::ChordPadBank  _pads;
+    pf::ChordPadBank   _pads;
 
-    // Pending MIDI for standalone virtual output
-    juce::MidiBuffer _pendingOut;
-    juce::SpinLock   _pendingLock;
+    int _lastInputNote { -1 };  // for auto snap direction
 
-    std::atomic<bool>          _panicNeeded  { false };
-    std::atomic<juce::MidiOutput*> _virtualOut { nullptr };
-    std::atomic<juce::MidiOutput*> _directOut  { nullptr };
+    std::atomic<bool>              _panicNeeded { false };
+    std::atomic<juce::MidiOutput*> _virtualOut  { nullptr };
+    std::atomic<juce::MidiOutput*> _directOut   { nullptr };
 
     double _sampleRate { 44100.0 };
 

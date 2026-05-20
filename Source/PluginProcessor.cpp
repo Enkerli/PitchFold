@@ -17,10 +17,12 @@ juce::AudioProcessorValueTreeState::ParameterLayout PitchFoldProcessor::createPa
     layout.add (std::make_unique<juce::AudioParameterInt>(
         juce::ParameterID { ParamID::pcsMask, 1 }, "PCS Mask", 0, 4095, 0x0AD5));
 
+    // 0=Auto 1=Nearest 2=Up 3=Down
     layout.add (std::make_unique<juce::AudioParameterChoice>(
         juce::ParameterID { ParamID::quantDir, 1 }, "Snap Direction",
-        juce::StringArray { "Nearest", "Up", "Down" }, 0));
+        juce::StringArray { "Auto", "Nearest", "Up", "Down" }, 0));
 
+    // Not exposed in UI yet — reserved for probability/histogram features.
     layout.add (std::make_unique<juce::AudioParameterFloat>(
         juce::ParameterID { ParamID::quantStrength, 1 }, "Snap Strength",
         juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 1.0f));
@@ -55,7 +57,6 @@ juce::AudioProcessorValueTreeState::ParameterLayout PitchFoldProcessor::createPa
         juce::ParameterID { ParamID::swing, 1 }, "Swing",
         juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.0f));
 
-    // Look-ahead / delay
     layout.add (std::make_unique<juce::AudioParameterFloat>(
         juce::ParameterID { ParamID::lookAheadMs, 1 }, "Look-ahead (ms)",
         juce::NormalisableRange<float> (0.0f, 500.0f, 1.0f), 0.0f));
@@ -91,7 +92,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout PitchFoldProcessor::createPa
     return layout;
 }
 
-// ── Constructor ───────────────────────────────────────────────────────────────
+// ── Constructor / Destructor ──────────────────────────────────────────────────
 
 PitchFoldProcessor::PitchFoldProcessor()
     : AudioProcessor (BusesProperties()),
@@ -112,78 +113,115 @@ void PitchFoldProcessor::prepareToPlay (double sampleRate, int /*samplesPerBlock
 
     _timeQ.prepare (sampleRate, 120.0);
     _voices.reset();
+    _noteMap = {};
+    _lastInputNote = -1;
 }
 
 void PitchFoldProcessor::releaseResources()
 {
     _delay.clear();
     _voices.reset();
+    _noteMap = {};
+    _lastInputNote = -1;
+}
+
+// ── Note-map helpers ──────────────────────────────────────────────────────────
+
+// Send NoteOff for every output note tracked for inputNote, then clear the record.
+static void releaseNoteRecord (PitchFoldProcessor::NoteRecord& rec,   // forward-declare trick
+                               int samplePos, juce::MidiBuffer& out) noexcept;
+
+// Helper visible only in this TU.
+namespace {
+void releaseRecord (std::array<PitchFoldProcessor::NoteRecord, 128>& map,
+                    int inputNote, int samplePos, juce::MidiBuffer& out) noexcept
+{
+    if (inputNote < 0 || inputNote > 127) return;
+    auto& rec = map[static_cast<std::size_t> (inputNote)];
+    if (!rec.active) return;
+    for (int i = 0; i < rec.count; ++i)
+    {
+        const auto& on = rec.outputs[i];
+        if (on.note >= 0)
+            out.addEvent (juce::MidiMessage::noteOff (on.channel, on.note), samplePos);
+    }
+    rec = {};
+}
+} // namespace
+
+void PitchFoldProcessor::clearNoteMap (juce::MidiBuffer& out, int samplePos) noexcept
+{
+    for (int n = 0; n < 128; ++n)
+        releaseRecord (_noteMap, n, samplePos, out);
 }
 
 // ── processBlock ──────────────────────────────────────────────────────────────
 
 void PitchFoldProcessor::processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer& midi)
 {
-    // ── Panic sweep ───────────────────────────────────────────────────────────
+    // ── Panic ─────────────────────────────────────────────────────────────────
+    // Send tracked NoteOffs first (so hosts that ignore AllNotesOff still work),
+    // then AllNotesOff on every channel as a belt-and-suspenders sweep.
+    // Forward to virtual output BEFORE returning.
     if (_panicNeeded.exchange (false))
     {
-        midi.clear();
+        juce::MidiBuffer panicBuf;
+        clearNoteMap (panicBuf, 0);
         for (int ch = 1; ch <= 16; ++ch)
-            midi.addEvent (juce::MidiMessage::allNotesOff (ch), 0);
+            panicBuf.addEvent (juce::MidiMessage::allNotesOff (ch), 0);
+
+        midi.swapWith (panicBuf);
+
+        if (auto* out = _virtualOut.load (std::memory_order_relaxed))
+            for (const auto meta : midi) out->sendMessageNow (meta.getMessage());
+        if (auto* out = _directOut.load (std::memory_order_relaxed))
+            for (const auto meta : midi) out->sendMessageNow (meta.getMessage());
+
         _voices.reset();
+        _lastInputNote = -1;
         return;
     }
 
-    // ── Read parameters ───────────────────────────────────────────────────────
-    const int root      = static_cast<int> (apvts.getRawParameterValue (ParamID::pcsRoot)->load());
-    const int maskRaw   = static_cast<int> (apvts.getRawParameterValue (ParamID::pcsMask)->load());
-    const auto mask     = static_cast<uint16_t> (maskRaw);
-    const int dirIdx    = static_cast<int> (apvts.getRawParameterValue (ParamID::quantDir)->load());
-    const float strength= apvts.getRawParameterValue (ParamID::quantStrength)->load();
-    const int loNote    = static_cast<int> (apvts.getRawParameterValue (ParamID::outputLo)->load());
-    const int hiNote    = static_cast<int> (apvts.getRawParameterValue (ParamID::outputHi)->load());
+    // ── Read parameters (once per block) ──────────────────────────────────────
+    const int root    = static_cast<int> (apvts.getRawParameterValue (ParamID::pcsRoot)->load());
+    const int maskRaw = static_cast<int> (apvts.getRawParameterValue (ParamID::pcsMask)->load());
+    const auto mask   = static_cast<uint16_t> (maskRaw);
+    const int dirIdx  = static_cast<int> (apvts.getRawParameterValue (ParamID::quantDir)->load());
+    const int loNote  = static_cast<int> (apvts.getRawParameterValue (ParamID::outputLo)->load());
+    const int hiNote  = static_cast<int> (apvts.getRawParameterValue (ParamID::outputHi)->load());
     const float delayMs = apvts.getRawParameterValue (ParamID::lookAheadMs)->load();
 
-    // Resolve pad override
     const uint16_t activeMask = _pads.activeMask (mask);
     const int      activeRoot = _pads.activeRoot (root);
 
-    const SnapDir dir = (dirIdx == 1) ? SnapDir::Up
-                      : (dirIdx == 2) ? SnapDir::Down
-                                      : SnapDir::Nearest;
-
-    // Update delay if param changed
     _delay.setDelayMs (static_cast<double> (delayMs));
 
-    // Update BPM from host
     if (const auto* ph = getPlayHead())
         if (auto info = ph->getPosition(); info.hasValue())
             if (auto bpm = info->getBpm(); bpm.hasValue())
                 _timeQ.setBpm (*bpm);
 
-    // Time config
     const int gridIdx = static_cast<int> (apvts.getRawParameterValue (ParamID::timeGrid)->load());
     TimeConfig timeCfg;
-    timeCfg.grid       = static_cast<TimeGrid> (gridIdx);
-    timeCfg.strength   = apvts.getRawParameterValue (ParamID::timeStrength)->load();
-    timeCfg.humanizeMs = apvts.getRawParameterValue (ParamID::humanizeTime)->load();
-    timeCfg.humanizeVel= apvts.getRawParameterValue (ParamID::humanizeVel)->load();
-    timeCfg.swing      = apvts.getRawParameterValue (ParamID::swing)->load();
+    timeCfg.grid        = static_cast<TimeGrid> (gridIdx);
+    timeCfg.strength    = apvts.getRawParameterValue (ParamID::timeStrength)->load();
+    timeCfg.humanizeMs  = apvts.getRawParameterValue (ParamID::humanizeTime)->load();
+    timeCfg.humanizeVel = apvts.getRawParameterValue (ParamID::humanizeVel)->load();
+    timeCfg.swing       = apvts.getRawParameterValue (ParamID::swing)->load();
 
-    // Voice config
-    const int voiceModeIdx  = static_cast<int> (apvts.getRawParameterValue (ParamID::voiceMode)->load());
-    const int monoSelIdx    = static_cast<int> (apvts.getRawParameterValue (ParamID::monoSelect)->load());
+    const int voiceModeIdx = static_cast<int> (apvts.getRawParameterValue (ParamID::voiceMode)->load());
     VoiceConfig voiceCfg;
-    voiceCfg.mode        = static_cast<VoiceMode> (voiceModeIdx);
-    voiceCfg.monoSelect  = static_cast<MonoSelect> (monoSelIdx);
-    voiceCfg.chordMask   = activeMask;
-    voiceCfg.chordRoot   = activeRoot;
-    voiceCfg.splitVoices = static_cast<int> (apvts.getRawParameterValue (ParamID::splitVoices)->load());
-    voiceCfg.splitChannel= static_cast<int> (apvts.getRawParameterValue (ParamID::splitChannel)->load());
-    voiceCfg.loNote      = loNote;
-    voiceCfg.hiNote      = hiNote;
+    voiceCfg.mode         = static_cast<VoiceMode> (voiceModeIdx);
+    voiceCfg.monoSelect   = static_cast<MonoSelect> (
+        static_cast<int> (apvts.getRawParameterValue (ParamID::monoSelect)->load()));
+    voiceCfg.chordMask    = activeMask;
+    voiceCfg.chordRoot    = activeRoot;
+    voiceCfg.splitVoices  = static_cast<int> (apvts.getRawParameterValue (ParamID::splitVoices)->load());
+    voiceCfg.splitChannel = static_cast<int> (apvts.getRawParameterValue (ParamID::splitChannel)->load());
+    voiceCfg.loNote       = loNote;
+    voiceCfg.hiNote       = hiNote;
 
-    // ── Push incoming MIDI through delay buffer ───────────────────────────────
+    // ── Delay buffer ──────────────────────────────────────────────────────────
     const int blockSize = getBlockSize();
     double ppqAtStart = 0.0;
     if (const auto* ph = getPlayHead())
@@ -193,11 +231,9 @@ void PitchFoldProcessor::processBlock (juce::AudioBuffer<float>&, juce::MidiBuff
 
     if (delayMs > 0.0f)
     {
-        // Push all incoming events into the delay buffer
         for (const auto meta : midi)
             _delay.push (meta.getMessage(), meta.samplePosition);
         midi.clear();
-        // Pop events that are old enough
         _delay.pop (blockSize, midi);
     }
 
@@ -207,28 +243,58 @@ void PitchFoldProcessor::processBlock (juce::AudioBuffer<float>&, juce::MidiBuff
     for (const auto meta : midi)
     {
         const auto& msg = meta.getMessage();
-        int samplePos   = meta.samplePosition;
+        int samplePos = meta.samplePosition;
 
         if (msg.isNoteOn())
         {
-            int note = msg.getNoteNumber();
-            int vel  = msg.getVelocity();
+            const int inputNote = msg.getNoteNumber();
+            int vel             = msg.getVelocity();
 
-            // Time quantize
+            // Auto snap direction: follow pitch motion
+            SnapDir dir;
+            if (dirIdx == 0)  // Auto
+            {
+                if      (_lastInputNote < 0)          dir = SnapDir::Nearest;
+                else if (inputNote > _lastInputNote)  dir = SnapDir::Up;
+                else if (inputNote < _lastInputNote)  dir = SnapDir::Down;
+                else                                  dir = SnapDir::Nearest;
+            }
+            else
+            {
+                dir = (dirIdx == 2) ? SnapDir::Up
+                    : (dirIdx == 3) ? SnapDir::Down
+                                    : SnapDir::Nearest;
+            }
+            _lastInputNote = inputNote;
+
+            // Time quantization
             if (timeCfg.grid != TimeGrid::Off || timeCfg.humanizeMs > 0.0f)
             {
                 const int offset = _timeQ.applyGrid (samplePos, ppqAtStart, blockSize, timeCfg, vel);
                 samplePos = juce::jlimit (0, blockSize - 1, samplePos + offset);
             }
 
-            // Pitch quantize
-            note = quantize (note, activeMask, activeRoot, dir, loNote, hiNote, strength);
+            // Pitch quantization
+            const int qNote = quantize (inputNote, activeMask, activeRoot, dir, loNote, hiNote);
 
             // Voice processing
-            int outNotes[VoiceProcessor::kMaxChordVoices];
+            int outNotes   [VoiceProcessor::kMaxChordVoices];
             int outChannels[VoiceProcessor::kMaxChordVoices];
-            const int n = _voices.processNoteOn (
-                note, msg.getChannel(), voiceCfg, outNotes, outChannels);
+            const int n = _voices.processNoteOn (qNote, msg.getChannel(), voiceCfg,
+                                                 outNotes, outChannels);
+
+            // Record output notes so NoteOff can match them
+            // If there was already a record for this input note, release it first.
+            releaseRecord (_noteMap, inputNote, samplePos, processed);
+
+            auto& rec = _noteMap[static_cast<std::size_t> (inputNote)];
+            rec.active = true;
+            rec.count  = std::min (n, static_cast<int> (VoiceProcessor::kMaxChordVoices));
+            for (int i = 0; i < rec.count; ++i)
+            {
+                rec.outputs[i].note    = outNotes[i];
+                rec.outputs[i].channel = outChannels[i];
+            }
 
             for (int i = 0; i < n; ++i)
                 processed.addEvent (
@@ -237,15 +303,11 @@ void PitchFoldProcessor::processBlock (juce::AudioBuffer<float>&, juce::MidiBuff
         }
         else if (msg.isNoteOff())
         {
-            const int note = msg.getNoteNumber();
-            const int ch   = _voices.processNoteOff (note);
-            processed.addEvent (
-                juce::MidiMessage::noteOff (ch > 0 ? ch : msg.getChannel(), note),
-                samplePos);
+            const int inputNote = msg.getNoteNumber();
+            releaseRecord (_noteMap, inputNote, samplePos, processed);
         }
         else
         {
-            // Pass everything else (CC, PB, etc.) through unchanged.
             processed.addEvent (msg, samplePos);
         }
     }
@@ -254,11 +316,9 @@ void PitchFoldProcessor::processBlock (juce::AudioBuffer<float>&, juce::MidiBuff
 
     // ── Standalone virtual output ─────────────────────────────────────────────
     if (auto* out = _virtualOut.load (std::memory_order_relaxed))
-        for (const auto meta : midi)
-            out->sendMessageNow (meta.getMessage());
+        for (const auto meta : midi) out->sendMessageNow (meta.getMessage());
     if (auto* out = _directOut.load (std::memory_order_relaxed))
-        for (const auto meta : midi)
-            out->sendMessageNow (meta.getMessage());
+        for (const auto meta : midi) out->sendMessageNow (meta.getMessage());
 }
 
 // ── Editor ────────────────────────────────────────────────────────────────────
@@ -272,7 +332,6 @@ juce::AudioProcessorEditor* PitchFoldProcessor::createEditor()
 
 void PitchFoldProcessor::getStateInformation (juce::MemoryBlock& dest)
 {
-    // Persist APVTS + pad labels (labels are not APVTS params).
     auto state = apvts.copyState();
 
     auto labels = juce::XmlElement ("PadLabels");
@@ -295,18 +354,14 @@ void PitchFoldProcessor::setStateInformation (const void* data, int size)
         auto state = juce::ValueTree::fromXml (*xml);
         apvts.replaceState (state);
 
-        // Restore pad labels
         if (auto* labels = xml->getChildByName ("PadLabels"))
-        {
             for (auto* el : labels->getChildIterator())
             {
                 const int idx = el->getIntAttribute ("index", -1);
                 if (idx >= 0 && idx < pf::kNumPads)
                     _pads.setPadLabel (idx, el->getStringAttribute ("label").toRawUTF8());
             }
-        }
 
-        // Sync pad masks/roots from APVTS to ChordPadBank.
         for (int i = 0; i < pf::kNumPads; ++i)
         {
             if (auto* p = apvts.getRawParameterValue (ParamID::padMask (i)))
@@ -323,16 +378,14 @@ void PitchFoldProcessor::setPadMask (int pad, uint16_t mask) noexcept
 {
     _pads.setPadMask (pad, mask);
     if (auto* p = apvts.getParameter (ParamID::padMask (pad)))
-        p->setValueNotifyingHost (
-            static_cast<float> (mask) / 4095.0f);
+        p->setValueNotifyingHost (static_cast<float> (mask) / 4095.0f);
 }
 
 void PitchFoldProcessor::setPadRoot (int pad, int root) noexcept
 {
     _pads.setPadRoot (pad, root);
     if (auto* p = apvts.getParameter (ParamID::padRoot (pad)))
-        p->setValueNotifyingHost (
-            static_cast<float> (root) / 11.0f);
+        p->setValueNotifyingHost (static_cast<float> (root) / 11.0f);
 }
 
 void PitchFoldProcessor::setPadLabel (int pad, const juce::String& label) noexcept
@@ -340,15 +393,8 @@ void PitchFoldProcessor::setPadLabel (int pad, const juce::String& label) noexce
     _pads.setPadLabel (pad, label.toRawUTF8());
 }
 
-void PitchFoldProcessor::selectPad (int pad) noexcept
-{
-    _pads.select (pad);
-}
-
-int PitchFoldProcessor::selectedPad() const noexcept
-{
-    return _pads.selected();
-}
+void PitchFoldProcessor::selectPad (int pad) noexcept { _pads.select (pad); }
+int  PitchFoldProcessor::selectedPad() const noexcept { return _pads.selected(); }
 
 // ── Panic ─────────────────────────────────────────────────────────────────────
 
@@ -374,7 +420,7 @@ juce::MidiOutput* PitchFoldProcessor::getDirectMidiOutput() const noexcept
     return _directOut.load (std::memory_order_relaxed);
 }
 
-// ── JUCE plugin factory ───────────────────────────────────────────────────────
+// ── Plugin factory ────────────────────────────────────────────────────────────
 
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
 {

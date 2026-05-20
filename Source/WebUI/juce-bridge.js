@@ -43,7 +43,7 @@ if (typeof window !== 'undefined' && !window.__juceLogPatched) {
 export const PARAM_MAP = [
   ['pcsRoot',        'pcsRoot',       v => Math.round(v),      v => v / 11],
   ['pcsMask',        'pcsMask',       v => Math.round(v),      v => v / 4095],
-  ['quantDir',       'quantDir',      v => Math.round(v),      v => v / 2],
+  ['quantDir',       'quantDir',      v => Math.round(v),      v => v / 3],  // 0-3
   ['quantStrength',  'quantStrength', v => v,                  v => v],
   ['outputLo',       'outputLo',      v => Math.round(v),      v => v / 127],
   ['outputHi',       'outputHi',      v => Math.round(v),      v => v / 127],
