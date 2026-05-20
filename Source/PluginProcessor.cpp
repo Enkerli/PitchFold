@@ -95,7 +95,16 @@ juce::AudioProcessorValueTreeState::ParameterLayout PitchFoldProcessor::createPa
 // ── Constructor / Destructor ──────────────────────────────────────────────────
 
 PitchFoldProcessor::PitchFoldProcessor()
-    : AudioProcessor (BusesProperties()),
+    : AudioProcessor (BusesProperties()
+        // iOS standalone: IS_MIDI_EFFECT is not set, so JucePlugin_IsMidiEffect=0.
+        // Stereo buses let AudioQueueNew initialise with channels > 0 (disabled=false
+        // means off by default; they pass through silently and are never audible).
+        // macOS: JucePlugin_IsMidiEffect=1 so this block is compiled out.
+      #if ! JucePlugin_IsMidiEffect
+        .withInput  ("Input",  juce::AudioChannelSet::stereo(), false)
+        .withOutput ("Output", juce::AudioChannelSet::stereo(), false)
+      #endif
+      ),
       apvts (*this, nullptr, "PitchFold", createParams())
 {
 }

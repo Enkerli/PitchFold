@@ -48,7 +48,12 @@ set(PLUGIN_BASE_PROPS
     IS_SYNTH                 FALSE
     NEEDS_MIDI_INPUT         TRUE
     NEEDS_MIDI_OUTPUT        TRUE
-    IS_MIDI_EFFECT           TRUE
+    # IS_MIDI_EFFECT is set per-platform below.
+    # On macOS it enables kAudioUnitType_MIDIProcessor AU subtype.
+    # On iOS it is intentionally omitted: IS_MIDI_EFFECT=TRUE forces
+    # JucePlugin_MaxNumChannels=0 which causes AudioQueueNew to fail with
+    # paramErr (-50) when the Standalone app tries to open an audio device.
+    # Runtime isMidiEffect()=true in the processor keeps host behaviour correct.
     EDITOR_WANTS_KEYBOARD_FOCUS FALSE
     COPY_PLUGIN_AFTER_BUILD  FALSE
 )
@@ -74,6 +79,7 @@ if(IS_IOS)
 elseif(IS_MACOS)
     juce_add_plugin(PitchFold
         ${PLUGIN_BASE_PROPS}
+        IS_MIDI_EFFECT TRUE   # kAudioUnitType_MIDIProcessor for AU/AUv3 on macOS
         FORMATS AU AUv3 VST3 Standalone
     )
 else()
