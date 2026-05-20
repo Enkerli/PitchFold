@@ -1,0 +1,17 @@
+build/
+build-ios/
+JUCE/
+*.xcodeproj/
+DerivedData/
+
+# WebUI
+Source/WebUI/node_modules/
+Source/WebUI/dist/bundle.js
+
+# macOS
+.DS_Store
+**/.DS_Store
+
+# Editor
+.vscode/
+*.swp
