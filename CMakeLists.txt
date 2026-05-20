@@ -118,6 +118,7 @@ if(NPXCMD)
             "${WEBUI_DIR}/design/tokens.jsx"
             "${WEBUI_DIR}/design/ui-primitives.jsx"
             "${WEBUI_DIR}/design/scale-editor.jsx"
+            "${WEBUI_DIR}/design/pcs-explorer.jsx"
             "${WEBUI_DIR}/design/quantizer-panel.jsx"
             "${WEBUI_DIR}/design/chord-pads.jsx"
             "${WEBUI_DIR}/design/voice-panel.jsx"
