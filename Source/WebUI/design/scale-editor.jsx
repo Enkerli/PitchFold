@@ -1,6 +1,8 @@
 // scale-editor.jsx — PCS selector for PitchFold.
 // Adapted from DrawnQurve's scale-editor.jsx; no lane context, global PCS only.
 
+import { PCSExplorer } from './pcs-explorer.jsx';
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function recognizeScaleId(mask) {
@@ -278,21 +280,23 @@ function countBits(n) {
 
 function ScaleBank({ mask, root, onSelect, paper = window.PAPER }) {
   const [tab, setTab] = React.useState('Common');
-  const scales  = window.SCALES         || [];
+  const scales   = window.SCALES         || [];
   const families = window.SCALE_FAMILIES || [];
 
-  const tabs = ['Common', ...families.map(f => FAMILY_LABELS[f.name] || f.name)];
+  const EXPLORER_TAB = 'Explorer';
+  const tabs = ['Common', ...families.map(f => FAMILY_LABELS[f.name] || f.name), EXPLORER_TAB];
 
   const shown = tab === 'Common'
     ? COMMON_IDS.map(({ id, label }) => {
         const s = scales.find(e => e.id === id);
         return s ? { ...s, label } : null;
       }).filter(Boolean)
-    : (() => {
-        // Reverse-map the short label back to the original family name.
-        const fam = families.find(f => (FAMILY_LABELS[f.name] || f.name) === tab);
-        return fam ? fam.modes : [];
-      })();
+    : tab === EXPLORER_TAB
+      ? []
+      : (() => {
+          const fam = families.find(f => (FAMILY_LABELS[f.name] || f.name) === tab);
+          return fam ? fam.modes : [];
+        })();
 
   const scaleBtn = (entry, label) => {
     const active = (mask & 0xFFF) === entry.mask;
@@ -311,11 +315,8 @@ function ScaleBank({ mask, root, onSelect, paper = window.PAPER }) {
           display: 'flex', alignItems: 'center', gap: 4,
         }}>
         {label ?? entry.name}
-        {tab !== 'Common' && (
-          <span style={{
-            fontSize: 9, opacity: 0.6,
-            fontVariantNumeric: 'tabular-nums',
-          }}>{k}</span>
+        {tab !== 'Common' && tab !== EXPLORER_TAB && (
+          <span style={{ fontSize: 9, opacity: 0.6, fontVariantNumeric: 'tabular-nums' }}>{k}</span>
         )}
       </button>
     );
@@ -336,10 +337,18 @@ function ScaleBank({ mask, root, onSelect, paper = window.PAPER }) {
           }}>{t}</button>
         ))}
       </div>
-      {/* Scale buttons */}
-      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-        {shown.map(s => scaleBtn(s, s.label))}
-      </div>
+
+      {/* Scale buttons (all tabs except Explorer) */}
+      {tab !== EXPLORER_TAB && (
+        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+          {shown.map(s => scaleBtn(s, s.label))}
+        </div>
+      )}
+
+      {/* Explorer tab — concentric PickPCS ring browser */}
+      {tab === EXPLORER_TAB && (
+        <PCSExplorer mask={mask} root={root} onSelect={onSelect} paper={paper} />
+      )}
     </div>
   );
 }
