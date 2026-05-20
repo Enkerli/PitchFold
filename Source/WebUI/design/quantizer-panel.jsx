@@ -89,12 +89,11 @@ function RangeSlider({ lo, hi, min, max, onChangeLo, onChangeHi, onChangeRange, 
         onChangeLo(Math.max(min, Math.min(fromFrac(frac(d.startLo) + df), d.startHi - 1)));
       } else if (d.which === 'hi') {
         onChangeHi(Math.min(max, Math.max(fromFrac(frac(d.startHi) + df), d.startLo + 1)));
-      } else {  // 'range'
-        const span = d.startHi - d.startLo;
-        let newLo  = fromFrac(frac(d.startLo) + df);
-        let newHi  = newLo + span;
-        if (newLo < min) { newLo = min;       newHi = min + span; }
-        if (newHi > max) { newHi = max;       newLo = max - span; }
+      } else {  // 'range' — each handle clamps independently so the range
+               //  narrows when pushed past a boundary (DrawnQurve behaviour)
+        let newLo = fromFrac(frac(d.startLo) + df);
+        let newHi = fromFrac(frac(d.startHi) + df);
+        if (newLo > newHi) newLo = newHi;
         onChangeRange(newLo, newHi);
       }
     };

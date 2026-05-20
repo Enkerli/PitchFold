@@ -102,7 +102,6 @@ public:
     void setDirectMidiOutput  (juce::MidiOutput* out) noexcept;
     juce::MidiOutput* getDirectMidiOutput() const noexcept;
 
-private:
     // ── Active-note map — fixes NoteOff matching after pitch quantization ─────
     // Indexed by the *input* note (0-127).  Stores every output note that was
     // generated for that input, so NoteOff can silence the right pitches even
@@ -114,6 +113,8 @@ private:
         OutNote outputs[pf::VoiceProcessor::kMaxChordVoices] {};
         int     count  { 0 };
     };
+
+private:
     std::array<NoteRecord, 128> _noteMap {};
 
     void clearNoteMap (juce::MidiBuffer& out, int samplePos) noexcept;

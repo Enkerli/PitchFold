@@ -127,10 +127,6 @@ void PitchFoldProcessor::releaseResources()
 
 // ── Note-map helpers ──────────────────────────────────────────────────────────
 
-// Send NoteOff for every output note tracked for inputNote, then clear the record.
-static void releaseNoteRecord (PitchFoldProcessor::NoteRecord& rec,   // forward-declare trick
-                               int samplePos, juce::MidiBuffer& out) noexcept;
-
 // Helper visible only in this TU.
 namespace {
 void releaseRecord (std::array<PitchFoldProcessor::NoteRecord, 128>& map,
