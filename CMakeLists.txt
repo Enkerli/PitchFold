@@ -5,17 +5,24 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED YES)
 
 # ── JUCE ─────────────────────────────────────────────────────────────────────
-# Symlink JUCE into this directory or set -DJUCE_PATH=/path/to/JUCE
+# Resolution order:
+#   1. Installed JUCE package (find_package)
+#   2. Local JUCE/ checkout or symlink, or -DJUCE_PATH=/path/to/JUCE
+#   3. FetchContent download, pinned (works from a clean clone with no setup)
 find_package(JUCE CONFIG QUIET)
 if(NOT JUCE_FOUND)
     set(JUCE_PATH "${CMAKE_SOURCE_DIR}/JUCE" CACHE PATH "Path to JUCE directory")
-    if(NOT EXISTS "${JUCE_PATH}/CMakeLists.txt")
-        message(FATAL_ERROR
-            "JUCE not found.\n"
-            "  (a) Set -DJUCE_PATH=/path/to/JUCE, or\n"
-            "  (b) Symlink JUCE here: ln -s /path/to/JUCE ${CMAKE_SOURCE_DIR}/JUCE\n")
+    if(EXISTS "${JUCE_PATH}/CMakeLists.txt")
+        add_subdirectory("${JUCE_PATH}" JUCE)
+    else()
+        message(STATUS "JUCE not found locally — fetching juce-framework/JUCE 8.0.13")
+        include(FetchContent)
+        FetchContent_Declare(JUCE
+            GIT_REPOSITORY https://github.com/juce-framework/JUCE.git
+            GIT_TAG 8.0.13
+            GIT_SHALLOW TRUE)
+        FetchContent_MakeAvailable(JUCE)
     endif()
-    add_subdirectory("${JUCE_PATH}" JUCE)
 endif()
 
 # ── Platform detection ────────────────────────────────────────────────────────
