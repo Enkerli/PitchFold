@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist>
+  <dict>
+    <key>CFBundleExecutable</key>
+    <string>PitchFold</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon.icns</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.enkerli.PitchFold</string>
+    <key>CFBundleName</key>
+    <string>PitchFold</string>
+    <key>CFBundleDisplayName</key>
+    <string>PitchFold</string>
+    <key>CFBundlePackageType</key>
+    <string>BNDL</string>
+    <key>CFBundleSignature</key>
+    <string>????</string>
+    <key>CFBundleShortVersionString</key>
+    <string>0.1.0</string>
+    <key>CFBundleVersion</key>
+    <string>0.1.0</string>
+    <key>NSHumanReadableCopyright</key>
+    <string></string>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+    <key>AudioComponents</key>
+    <array>
+      <dict>
+        <key>name</key>
+        <string>Enkerli: PitchFold</string>
+        <key>description</key>
+        <string>PCS pitch quantizer with performance pads</string>
+        <key>factoryFunction</key>
+        <string>PitchFoldAUFactory</string>
+        <key>manufacturer</key>
+        <string>Enke</string>
+        <key>type</key>
+        <string>aumi</string>
+        <key>subtype</key>
+        <string>Pqf1</string>
+        <key>version</key>
+        <integer>256</integer>
+      </dict>
+    </array>
+  </dict>
+</plist>

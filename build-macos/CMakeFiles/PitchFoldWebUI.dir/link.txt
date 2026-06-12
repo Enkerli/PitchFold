@@ -1,0 +1,2 @@
+/usr/bin/ar qc libPitchFoldWebUI.a CMakeFiles/PitchFoldWebUI.dir/juce_binarydata_PitchFoldWebUI/JuceLibraryCode/BinaryData1.cpp.o CMakeFiles/PitchFoldWebUI.dir/juce_binarydata_PitchFoldWebUI/JuceLibraryCode/BinaryData2.cpp.o
+/usr/bin/ranlib libPitchFoldWebUI.a

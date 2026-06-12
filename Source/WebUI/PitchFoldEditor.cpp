@@ -63,7 +63,10 @@ juce::WebBrowserComponent::Options PitchFoldEditor::buildOptions (PitchFoldEdito
         .withEventListener ("uiReady", [owner] (const Array<var>&)
         {
             owner->pageReady = true;
-            juce::MessageManager::callAsync ([owner] { owner->sendStateSnapshot(); });
+            // SafePointer: queued lambdas can outlive the editor (hosts and
+            // pluginval open/close it rapidly while processing).
+            juce::Component::SafePointer<PitchFoldEditor> safe (owner);
+            juce::MessageManager::callAsync ([safe] { if (safe) safe->sendStateSnapshot(); });
         })
 
         // "setParam" — normalised 0–1 value
@@ -108,7 +111,8 @@ juce::WebBrowserComponent::Options PitchFoldEditor::buildOptions (PitchFoldEdito
             if (obj.hasProperty ("label"))
                 owner->proc.setPadLabel (pad, obj["label"].toString());
             // Echo change back to UI
-            juce::MessageManager::callAsync ([owner] { owner->sendStateSnapshot(); });
+            juce::Component::SafePointer<PitchFoldEditor> safe (owner);
+            juce::MessageManager::callAsync ([safe] { if (safe) safe->sendStateSnapshot(); });
         })
 
         // "panic"
@@ -144,7 +148,8 @@ PitchFoldEditor::PitchFoldEditor (PitchFoldProcessor& p)
             proc.setVirtualMidiOutput (virtualMidiPort.get());
     }
 
-    juce::MessageManager::callAsync ([this] { navigateIfNeeded(); });
+    juce::Component::SafePointer<PitchFoldEditor> safe (this);
+    juce::MessageManager::callAsync ([safe] { if (safe) safe->navigateIfNeeded(); });
     startTimer (33);   // 30 Hz
 }
 
@@ -193,10 +198,13 @@ void PitchFoldEditor::timerCallback()
 void PitchFoldEditor::parameterChanged (const juce::String& paramID, float newValue)
 {
     if (!pageReady) return;
-    juce::MessageManager::callAsync ([this, paramID, newValue]
+    // Fires from any thread (host automation, audio thread); the editor may
+    // be gone by the time the message thread runs this — SafePointer guards.
+    juce::Component::SafePointer<PitchFoldEditor> safe (this);
+    juce::MessageManager::callAsync ([safe, paramID, newValue]
     {
-        if (!pageReady) return;
-        webView.emitEventIfBrowserIsVisible ("paramChange",
+        if (safe == nullptr || !safe->pageReady) return;
+        safe->webView.emitEventIfBrowserIsVisible ("paramChange",
             makeObj ({ { "id", paramID }, { "value", newValue } }));
     });
 }
