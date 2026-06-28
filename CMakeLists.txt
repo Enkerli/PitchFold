@@ -49,8 +49,23 @@ juce_add_binary_data(PitchFoldFonts SOURCES
 target_link_libraries(PitchFold PRIVATE PitchFoldFonts)
 
 # ── WebUI bundle ──────────────────────────────────────────────────────────────
-set(WEBUI_DIR  "${CMAKE_CURRENT_SOURCE_DIR}/Source/WebUI")
-set(WEBUI_DIST "${WEBUI_DIR}/dist")
+# The WebUI *source* lives in the music-suite monorepo (apps/pitchfold) — single
+# source shared with the standalone webapp; only the C++ editor (PitchFoldEditor.*)
+# stays here. Default to the maintainer's sibling checkout; override per machine
+# in webui.local.cmake (gitignored). esbuild/react resolve from the monorepo's
+# hoisted node_modules, so the monorepo must be checked out and `npm install`ed.
+set(PITCHFOLD_WEBUI_DIR "${CMAKE_SOURCE_DIR}/../music-suite/apps/pitchfold"
+    CACHE PATH "Path to the PitchFold WebUI source (music-suite/apps/pitchfold)")
+include("${CMAKE_CURRENT_SOURCE_DIR}/webui.local.cmake" OPTIONAL)
+set(WEBUI_DIR  "${PITCHFOLD_WEBUI_DIR}")
+set(WEBUI_DIST "${CMAKE_CURRENT_BINARY_DIR}/webui")
+
+if(NOT EXISTS "${WEBUI_DIR}/main.jsx")
+    message(FATAL_ERROR
+        "PitchFold WebUI source not found at ${WEBUI_DIR}. It now lives in the "
+        "music-suite monorepo (apps/pitchfold). Check out music-suite next to this "
+        "repo, or set PITCHFOLD_WEBUI_DIR in webui.local.cmake.")
+endif()
 
 find_program(NPXCMD npx)
 if(NPXCMD)

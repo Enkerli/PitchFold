@@ -4,9 +4,12 @@ build-ios/
 *.xcodeproj/
 DerivedData/
 
-# WebUI
+# WebUI source now lives in the music-suite monorepo (apps/pitchfold); only the
+# C++ editor (PitchFoldEditor.*) remains under Source/WebUI here. The esbuild
+# bundle is generated into the build tree from the monorepo source.
 Source/WebUI/node_modules/
-Source/WebUI/dist/bundle.js
+Source/WebUI/dist/
+webui.local.cmake
 
 # macOS
 .DS_Store
