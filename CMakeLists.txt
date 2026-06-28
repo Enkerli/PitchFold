@@ -72,8 +72,9 @@ if(NPXCMD)
     add_custom_command(
         OUTPUT  "${WEBUI_DIST}/bundle.js" "${WEBUI_DIST}/index.html"
         COMMAND "${NPXCMD}" esbuild "${WEBUI_DIR}/main.jsx"
-                    --bundle
+                    --bundle --conditions=source
                     "--inject:${WEBUI_DIR}/react-globals.js"
+                    "--banner:js=/*! Bundles WEBMIDI.js (c) Jean-Philippe Cote, Apache-2.0, https://webmidijs.org - see @enkerli/webmidi/THIRD_PARTY_LICENSES.md */"
                     "--define:process.env.NODE_ENV=\"production\""
                     --minify
                     "--outfile=${WEBUI_DIST}/bundle.js"
@@ -82,8 +83,11 @@ if(NPXCMD)
         DEPENDS
             "${WEBUI_DIR}/main.jsx"
             "${WEBUI_DIR}/juce-bridge.js"
+            "${WEBUI_DIR}/webmidi-bridge.js"
             "${WEBUI_DIR}/react-globals.js"
             "${WEBUI_DIR}/index.html"
+            "${WEBUI_DIR}/engine/pcs.js"
+            "${WEBUI_DIR}/engine/voices.js"
             "${WEBUI_DIR}/design/tokens.jsx"
             "${WEBUI_DIR}/design/ui-primitives.jsx"
             "${WEBUI_DIR}/design/scale-editor.jsx"
