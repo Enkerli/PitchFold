@@ -23,7 +23,7 @@ namespace pf
 inline bool pcActive (uint16_t mask, int interval) noexcept
 {
     interval = ((interval % 12) + 12) % 12;
-    return (mask >> (11 - interval)) & 1;
+    return (mask >> (interval)) & 1;
 }
 
 // True if pitch class pc is in the scale defined by (mask, root).
@@ -167,7 +167,7 @@ inline int harmonize (int       midiNote,
     int count = 0;
     for (int i = 0; i < 12 && count < maxVoices; ++i)
     {
-        if (!((intervalsMask >> (11 - i)) & 1)) continue;
+        if (!((intervalsMask >> (i)) & 1)) continue;
         const int note = midiNote + i;
         if (note >= loNote && note <= hiNote)
             out[count++] = note;

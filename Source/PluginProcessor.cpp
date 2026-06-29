@@ -15,7 +15,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout PitchFoldProcessor::createPa
         juce::ParameterID { ParamID::pcsRoot, 1 }, "Root", 0, 11, 0));
 
     layout.add (std::make_unique<juce::AudioParameterInt>(
-        juce::ParameterID { ParamID::pcsMask, 1 }, "PCS Mask", 0, 4095, 0x0AD5));
+        juce::ParameterID { ParamID::pcsMask, 1 }, "PCS Mask", 0, 4095, 0x0AB5));
 
     // 0=Auto 1=Nearest 2=Up 3=Down
     layout.add (std::make_unique<juce::AudioParameterChoice>(

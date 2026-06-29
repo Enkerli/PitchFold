@@ -22,7 +22,7 @@ static constexpr int kNumPads = 16;
 
 struct Pad
 {
-    uint16_t mask  { 0x0AD5u };  // Ionian (major) default
+    uint16_t mask  { 0x0AB5u };  // Ionian (major) default
     int      root  { 0 };        // C
     char     label[32] = {};     // short display name, UTF-8
 
@@ -41,14 +41,14 @@ public:
         // Populate with the 7 diatonic modes as defaults.
         static const struct { uint16_t mask; const char* name; } kDefaults[kNumPads] =
         {
-            { 0x0AD5, "Ionian"      }, { 0x0B56, "Dorian"     },
-            { 0x0D5A, "Phrygian"    }, { 0x0AB5, "Lydian"     },
-            { 0x0AD6, "Mixolydian"  }, { 0x0B5A, "Aeolian"    },
-            { 0x0D6A, "Locrian"     }, { 0x0A94, "Pent. Maj"  },
-            { 0x0952, "Pent. Min"   }, { 0x0AAA, "Whole Tone" },
-            { 0x0B6D, "Dim. WH"     }, { 0x0890, "Maj Triad"  },
-            { 0x0910, "Min Triad"   }, { 0x0891, "Maj 7"      },
-            { 0x0912, "Min 7"       }, { 0x0892, "Dom 7"      },
+            { 0x0AB5, "Ionian"      }, { 0x06AD, "Dorian"     },
+            { 0x05AB, "Phrygian"    }, { 0x0AD5, "Lydian"     },
+            { 0x06B5, "Mixolydian"  }, { 0x05AD, "Aeolian"    },
+            { 0x056B, "Locrian"     }, { 0x0295, "Pent. Maj"  },
+            { 0x04A9, "Pent. Min"   }, { 0x0555, "Whole Tone" },
+            { 0x0B6D, "Dim. WH"     }, { 0x0091, "Maj Triad"  },
+            { 0x0089, "Min Triad"   }, { 0x0891, "Maj 7"      },
+            { 0x0489, "Min 7"       }, { 0x0491, "Dom 7"      },
         };
 
         for (int i = 0; i < kNumPads; ++i)
