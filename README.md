@@ -23,3 +23,10 @@ JUCE is resolved in this order:
 ## License
 
 See [LICENSE](LICENSE).
+
+## Suite handoff
+
+This repo is part of the Enkerli music suite. For the whole-suite picture —
+repo map, conventions (leftmost-LSB bit order, structural spelling),
+build/validation ladders, and open queues — start at the suite handoff:
+<https://github.com/Enkerli/music-suite/blob/main/HANDOFF.md>.
