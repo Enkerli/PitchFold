@@ -1,2 +1,0 @@
-/usr/bin/ar qc libPitchFoldFonts.a CMakeFiles/PitchFoldFonts.dir/juce_binarydata_PitchFoldFonts/JuceLibraryCode/BinaryData1.cpp.o CMakeFiles/PitchFoldFonts.dir/juce_binarydata_PitchFoldFonts/JuceLibraryCode/BinaryData2.cpp.o CMakeFiles/PitchFoldFonts.dir/juce_binarydata_PitchFoldFonts/JuceLibraryCode/BinaryData3.cpp.o CMakeFiles/PitchFoldFonts.dir/juce_binarydata_PitchFoldFonts/JuceLibraryCode/BinaryData4.cpp.o
-/usr/bin/ranlib libPitchFoldFonts.a

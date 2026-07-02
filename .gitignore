@@ -1,5 +1,6 @@
 build/
 build-ios/
+build-macos/
 /JUCE
 *.xcodeproj/
 DerivedData/
