@@ -104,6 +104,12 @@ if(NPXCMD)
         DEPENDS "${WEBUI_DIST}/bundle.js" "${WEBUI_DIST}/index.html")
 endif()
 
+# The WebUI files are produced by the esbuild custom command above. The Visual
+# Studio generator (unlike Make/Ninja) needs them explicitly marked GENERATED,
+# or it treats them as missing inputs (MSB8065) and juceaide throws on Windows.
+set_source_files_properties(
+    "${WEBUI_DIST}/index.html" "${WEBUI_DIST}/bundle.js"
+    PROPERTIES GENERATED TRUE)
 juce_add_binary_data(PitchFoldWebUI
     HEADER_NAME BinaryDataWebUI.h
     NAMESPACE   BinaryData
