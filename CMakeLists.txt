@@ -69,8 +69,11 @@ endif()
 
 find_program(NPXCMD npx)
 if(NPXCMD)
+    # esbuild produces bundle.js only; index.html is embedded from source (it's
+    # a static shell). A single-output custom command avoids the Visual Studio
+    # generator's multi-output/one-rule confusion (MSB8065 → juceaide crash).
     add_custom_command(
-        OUTPUT  "${WEBUI_DIST}/bundle.js" "${WEBUI_DIST}/index.html"
+        OUTPUT  "${WEBUI_DIST}/bundle.js"
         COMMAND "${NPXCMD}" esbuild "${WEBUI_DIR}/main.jsx"
                     --bundle --conditions=source
                     "--inject:${WEBUI_DIR}/react-globals.js"
@@ -78,8 +81,6 @@ if(NPXCMD)
                     "--define:process.env.NODE_ENV=\"production\""
                     --minify
                     "--outfile=${WEBUI_DIST}/bundle.js"
-        COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-                    "${WEBUI_DIR}/index.html" "${WEBUI_DIST}/index.html"
         DEPENDS
             "${WEBUI_DIR}/main.jsx"
             "${WEBUI_DIR}/juce-bridge.js"
@@ -101,20 +102,17 @@ if(NPXCMD)
         VERBATIM
     )
     add_custom_target(PitchFoldWebUIBundle
-        DEPENDS "${WEBUI_DIST}/bundle.js" "${WEBUI_DIST}/index.html")
+        DEPENDS "${WEBUI_DIST}/bundle.js")
 endif()
 
-# The WebUI files are produced by the esbuild custom command above. The Visual
-# Studio generator (unlike Make/Ninja) needs them explicitly marked GENERATED,
-# or it treats them as missing inputs (MSB8065) and juceaide throws on Windows.
-set_source_files_properties(
-    "${WEBUI_DIST}/index.html" "${WEBUI_DIST}/bundle.js"
-    PROPERTIES GENERATED TRUE)
+# The generated bundle.js is marked GENERATED so the VS generator schedules it
+# after the custom command; index.html is embedded straight from source.
+set_source_files_properties("${WEBUI_DIST}/bundle.js" PROPERTIES GENERATED TRUE)
 juce_add_binary_data(PitchFoldWebUI
     HEADER_NAME BinaryDataWebUI.h
     NAMESPACE   BinaryData
     SOURCES
-        "${WEBUI_DIST}/index.html"
+        "${WEBUI_DIR}/index.html"
         "${WEBUI_DIST}/bundle.js"
 )
 if(NPXCMD)
