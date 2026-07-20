@@ -162,13 +162,10 @@ target_sources(PitchFold PRIVATE
     Source/Quantizer/TimeQuantizer.h
     Source/Quantizer/VoiceProcessor.h
     Source/Pads/ChordPadBank.h
-    Source/UI/ChromaticWheel.h
-    Source/UI/ScaleLattice.h
-    Source/UI/PCSPreview.h
 )
 
 target_include_directories(PitchFold PRIVATE
-    Source Source/PCS Source/Quantizer Source/Pads Source/UI Source/WebUI)
+    Source Source/PCS Source/Quantizer Source/Pads Source/WebUI)
 
 # ── Compile definitions (suite-standard ones come from the archetype) ────────
 target_compile_definitions(PitchFold

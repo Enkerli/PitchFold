@@ -185,6 +185,7 @@ void PitchFoldProcessor::processBlock (juce::AudioBuffer<float>&, juce::MidiBuff
     const int dirIdx  = static_cast<int> (apvts.getRawParameterValue (ParamID::quantDir)->load());
     const int loNote  = static_cast<int> (apvts.getRawParameterValue (ParamID::outputLo)->load());
     const int hiNote  = static_cast<int> (apvts.getRawParameterValue (ParamID::outputHi)->load());
+    const float quantStrength = apvts.getRawParameterValue (ParamID::quantStrength)->load();
     const float delayMs = apvts.getRawParameterValue (ParamID::lookAheadMs)->load();
 
     const uint16_t activeMask = _pads.activeMask (mask);
@@ -271,7 +272,7 @@ void PitchFoldProcessor::processBlock (juce::AudioBuffer<float>&, juce::MidiBuff
             }
 
             // Pitch quantization
-            const int qNote = quantize (inputNote, activeMask, activeRoot, dir, loNote, hiNote);
+            const int qNote = quantize (inputNote, activeMask, activeRoot, dir, loNote, hiNote, quantStrength);
 
             // Voice processing
             int outNotes   [VoiceProcessor::kMaxChordVoices];

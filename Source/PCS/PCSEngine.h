@@ -5,11 +5,16 @@
  *
  * No JUCE dependency.  Header-only, no allocations.
  *
- * Bitmask convention (shared with ScaleData.h):
- *   bit (11 − interval) = 1  →  interval is active.
- *   bit 11 = unison (interval 0), bit 0 = major 7th (interval 11).
+ * Bitmask convention (leftmost-LSB, shared with ScaleData.h — matches the
+ * suite-wide convention, @enkerli/theory, and the webapp twin):
+ *   bit (interval) = 1  →  interval is active.
+ *   bit 0 = unison (interval 0), bit 11 = major 7th (interval 11).
  *
  * All lookups are root-relative: interval = ((pitch - root) % 12 + 12) % 12.
+ *
+ * (This comment previously documented the OLD MSB-first scheme, from before
+ * the 2026-06-28 harmonization — the code below was always correct, only
+ * the comment was stale. Fixed as part of docs/PITCHFOLD_AUDIT.md.)
  */
 
 #include <cstdint>
