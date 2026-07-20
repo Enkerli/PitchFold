@@ -104,7 +104,7 @@ if(NPXCMD)
     add_custom_command(
         OUTPUT  "${WEBUI_DIST}/bundle.js"
         COMMAND "${NPXCMD}" esbuild "${WEBUI_DIR}/main.jsx"
-                    --bundle --conditions=source
+                    --bundle --conditions=source --loader:.css=text
                     "--inject:${WEBUI_DIR}/react-globals.js"
                     "--banner:js=/*! Bundles WEBMIDI.js (c) Jean-Philippe Cote, Apache-2.0, https://webmidijs.org - see @enkerli/webmidi/THIRD_PARTY_LICENSES.md */"
                     "--define:process.env.NODE_ENV=\"production\""
